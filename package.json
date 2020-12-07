@@ -1,0 +1,15 @@
+{
+  "name": "sourcefilevisualizer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "nodeStructure.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^14.0.13",
+    "typescript": "^3.9.5"
+  }
+}
