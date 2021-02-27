@@ -26,9 +26,14 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.window.onDidChangeTextEditorSelection(e => {
 		const panelConfig = panels.get(e.textEditor.document.uri);
 		if (panelConfig) {
-			panelConfig.selections = e.selections;
-
-			panelRefresh(panelConfig, e.textEditor.document.uri, e.textEditor.document.getText());
+			if (panelConfig.selections && !panelConfig.selections[0].isEqual(e.selections[0])) {
+				// Update and refresh.
+				panelConfig.selections = e.selections;
+				panelRefresh(panelConfig, e.textEditor.document.uri, e.textEditor.document.getText());
+			}
+			else {
+				panelConfig.selections = e.selections;
+			}
 		}
 	});
 
@@ -85,11 +90,17 @@ export function activate(context: vscode.ExtensionContext) {
 					panelRefresh(panelConfig, uri, document.getText());
 					break;
 				case 'nodeClick':
-					// TODO: Implement on mouse click and mouse over.
-					// const anchorLineCharacter = JSON.parse(e.anchorLineCharacterJson);
-					// const activeLineCharacter = JSON.parse(e.anchorLineCharacterJson);
-					// const anchorPosition = new vscode.Position(anchorLineCharacter.line, anchorLineCharacter.position);
-					// const activePosition = new vscode.Position(activeLineCharacter.line, activeLineCharacter.position);
+					const anchorLineCharacter = JSON.parse(e.anchorLineCharacterJson);
+					const activeLineCharacter = JSON.parse(e.activeLineCharacterJson);
+					const anchorPosition = new vscode.Position(anchorLineCharacter.line, anchorLineCharacter.character);
+					const activePosition = new vscode.Position(activeLineCharacter.line, activeLineCharacter.character);
+
+					for (const textEditor of vscode.window.visibleTextEditors) {
+						if (textEditor.document === document) {
+							textEditor.revealRange(new vscode.Range(anchorPosition, activePosition));
+							textEditor.selection = new vscode.Selection(anchorPosition, activePosition);
+						}
+					}
 					break;
 				case 'nodeMouseOver':
 					break;
@@ -178,7 +189,6 @@ function getWebviewContent(docSrc: string, treantCssSrc: vscode.Uri, treantJsSrc
 
 				for(let match of matches) {
 					match.onclick = function() {
-						debugger;
 						vscode.postMessage({
 							command: 'nodeClick',
 							anchorLineCharacterJson: match.dataset.anchorlinecharacterjson,
