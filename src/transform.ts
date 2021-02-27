@@ -109,6 +109,6 @@ export async function getTreeConfig(uri: vscode.Uri, sourceText: string, treeMod
 }
 
 export enum TreeMode {
-    forEachChild,
-    getChildren,
+    forEachChild = "forEachChild",
+    getChildren = "getChildren",
 };

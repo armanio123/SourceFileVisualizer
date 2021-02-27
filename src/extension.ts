@@ -2,13 +2,32 @@ import * as vscode from 'vscode';
 import { getTreeConfig, TreeMode } from './transform';
 import * as path from 'path';
 
+enum Commands {
+	treeModeChange = 'treeModeChange',
+	nodeMouseEnter = 'nodeMouseEnter',
+	nodeClick = 'nodeClick',
+	nodeMouseLeave = 'nodeMouseLeave'
+}
+
 interface PanelConfig {
 	panel: vscode.WebviewPanel;
 	treeMode: TreeMode;
 	selections: ReadonlyArray<vscode.Selection> | undefined;
 }
 
+interface Message {
+	command: Commands;
+	treeMode?: TreeMode;
+	anchorLineCharacterJson?: string;
+	activeLineCharacterJson?: string;
+}
+
 export function activate(context: vscode.ExtensionContext) {
+	// TODO: Use vscodes themes
+	var mouseOverDecoration = vscode.window.createTextEditorDecorationType({
+		backgroundColor: '#613214',
+	});
+
 	const panels: Map<vscode.Uri, PanelConfig> = new Map<vscode.Uri, PanelConfig>();
 
 	const treantJs = vscode.Uri.file(path.join(context.extensionPath, 'treant-js-master', 'Treant.js'));
@@ -23,6 +42,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// TOOD: Dont refresh the whole html, instead just message the new selection. Is probably a performance improvement.
 	vscode.window.onDidChangeTextEditorSelection(e => {
 		const panelConfig = panels.get(e.textEditor.document.uri);
 		if (panelConfig) {
@@ -49,7 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
 		);
 	}
 
-	let command = vscode.commands.registerCommand('sourcefilevisualizer.visualizeTree', async () => {
+	const command = vscode.commands.registerCommand('sourcefilevisualizer.visualizeTree', async () => {
 		const document = vscode.window.activeTextEditor?.document;
 		const uri = document?.uri;
 		if (!document || !uri) {
@@ -83,27 +103,34 @@ export function activate(context: vscode.ExtensionContext) {
 			panels.delete(uri);
 		});
 
-		panel.webview.onDidReceiveMessage(async e => {
+		panel.webview.onDidReceiveMessage(async (e: Message) => {
+			const { anchor, active } = getPositions(e);
+			const textEditor = getTextEditor();
 			switch (e.command) {
-				case 'treeModeChange':
-					panelConfig.treeMode = TreeMode[e.treeMode as keyof typeof TreeMode];
+				case Commands.treeModeChange:
+					panelConfig.treeMode = e.treeMode!;
 					panelRefresh(panelConfig, uri, document.getText());
 					break;
-				case 'nodeClick':
-					const anchorLineCharacter = JSON.parse(e.anchorLineCharacterJson);
-					const activeLineCharacter = JSON.parse(e.activeLineCharacterJson);
-					const anchorPosition = new vscode.Position(anchorLineCharacter.line, anchorLineCharacter.character);
-					const activePosition = new vscode.Position(activeLineCharacter.line, activeLineCharacter.character);
+				case Commands.nodeClick:
+					textEditor.revealRange(new vscode.Range(anchor!, active!));
+					textEditor.selection = new vscode.Selection(anchor!, active!);
+					break;
+				case Commands.nodeMouseEnter:
+					textEditor.setDecorations(mouseOverDecoration, [new vscode.Range(anchor!, active!)]);
+					break;
+				case Commands.nodeMouseLeave:
+					textEditor.setDecorations(mouseOverDecoration, []);
+					break;
+			}
 
-					for (const textEditor of vscode.window.visibleTextEditors) {
-						if (textEditor.document === document) {
-							textEditor.revealRange(new vscode.Range(anchorPosition, activePosition));
-							textEditor.selection = new vscode.Selection(anchorPosition, activePosition);
-						}
+			function getTextEditor(): vscode.TextEditor {
+				for (const textEditor of vscode.window.visibleTextEditors) {
+					if (textEditor.document === document) {
+						return textEditor;
 					}
-					break;
-				case 'nodeMouseOver':
-					break;
+				}
+
+				throw new Error('textEditor not found');
 			}
 		});
 
@@ -120,6 +147,20 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() { }
+
+function getPositions(message: Message): { anchor?: vscode.Position, active?: vscode.Position } {
+	if (!message.anchorLineCharacterJson || !message.activeLineCharacterJson) {
+		return {};
+	}
+
+	const anchorLineCharacter = JSON.parse(message.anchorLineCharacterJson!);
+	const activeLineCharacter = JSON.parse(message.activeLineCharacterJson!);
+
+	return {
+		anchor: new vscode.Position(anchorLineCharacter.line, anchorLineCharacter.character),
+		active: new vscode.Position(activeLineCharacter.line, activeLineCharacter.character)
+	};
+}
 
 // TODO: Remove execution of docSrc. I think this is a security flaw.
 // TOOD: Move html to it's own file. Dev debt.
@@ -193,6 +234,18 @@ function getWebviewContent(docSrc: string, treantCssSrc: vscode.Uri, treantJsSrc
 							command: 'nodeClick',
 							anchorLineCharacterJson: match.dataset.anchorlinecharacterjson,
 							activeLineCharacterJson: match.dataset.activelinecharacterjson,
+						});
+					}
+					match.onmouseenter = function() {
+						vscode.postMessage({
+							command: 'nodeMouseEnter',
+							anchorLineCharacterJson: match.dataset.anchorlinecharacterjson,
+							activeLineCharacterJson: match.dataset.activelinecharacterjson,
+						});
+					}
+					match.onmouseleave = function() {
+						vscode.postMessage({
+							command: 'nodeMouseLeave'
 						});
 					}
 				}
