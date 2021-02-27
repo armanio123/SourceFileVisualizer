@@ -1,5 +1,4 @@
-// TODO: Configure typescript location or use vscode tsdk.
-import * as ts from '/Repos/TypeScript-GH/built/local/typescript';
+import type { SourceFile, Node } from 'typescript';
 import * as vscode from 'vscode';
 
 interface ChartStructure {
@@ -15,8 +14,21 @@ interface ChartStructure {
     children: ChartStructure[];
 }
 
-function getChartStructure(sourceFile: ts.SourceFile, node: ts.Node, children: ChartStructure[], selections: ReadonlyArray<vscode.Selection> | undefined): ChartStructure {
+async function getTS(): Promise<typeof import('typescript')> {
+    const tsdk = vscode.workspace.getConfiguration("typescript").get("tsdk");
+
+    if (typeof tsdk === "string") {
+        return await import(`${tsdk}/typescript.js`);
+    }
+
+    // TODO: Handle the error gracefully or default a typescript version.
+    // Preferably the current VSCode version.
+    throw new Error(`Configuration error. tsdk value: "${tsdk}"`);
+}
+
+async function getChartStructure(sourceFile: SourceFile, node: Node, children: ChartStructure[], selections: ReadonlyArray<vscode.Selection> | undefined): Promise<ChartStructure> {
     let isSelected = false;
+    const ts = await getTS();
     if (selections) {
         for (let selection of selections) {
             const start = ts.getLineAndCharacterOfPosition(sourceFile, node.pos);
@@ -53,27 +65,30 @@ function getChartStructure(sourceFile: ts.SourceFile, node: ts.Node, children: C
     };
 }
 
-function treeConfigGetChildren(sourceFile: ts.SourceFile, node: ts.Node, selections: ReadonlyArray<vscode.Selection> | undefined): ChartStructure {
+async function treeConfigGetChildren(sourceFile: SourceFile, node: Node, selections: ReadonlyArray<vscode.Selection> | undefined): Promise<ChartStructure> {
     let children: ChartStructure[] = [];
 
     for (let childNode of node.getChildren()) {
-        children.push(treeConfigGetChildren(sourceFile, childNode, selections));
+        children.push(await treeConfigGetChildren(sourceFile, childNode, selections));
     }
 
-    return getChartStructure(sourceFile, node, children, selections);
+    return await getChartStructure(sourceFile, node, children, selections);
 }
 
-function treeConfigForEachChild(sourceFile: ts.SourceFile, node: ts.Node, selections: ReadonlyArray<vscode.Selection> | undefined): ChartStructure {
+async function treeConfigForEachChild(sourceFile: SourceFile, node: Node, selections: ReadonlyArray<vscode.Selection> | undefined): Promise<ChartStructure> {
     let children: ChartStructure[] = [];
+    const ts = await getTS();
 
-    ts.forEachChild(node, childNode => {
-        children.push(treeConfigForEachChild(sourceFile, childNode, selections));
+    ts.forEachChild(node, async childNode => {
+        children.push(await treeConfigForEachChild(sourceFile, childNode, selections));
     });
 
-    return getChartStructure(sourceFile, node, children, selections);
+    return await getChartStructure(sourceFile, node, children, selections);
 }
 
 export async function getTreeConfig(uri: vscode.Uri, sourceText: string, treeMode: TreeMode, selections: ReadonlyArray<vscode.Selection> | undefined) {
+    const ts = await getTS();
+
     const sourceFile = ts.createSourceFile(
         uri.path,
         sourceText,
@@ -83,10 +98,10 @@ export async function getTreeConfig(uri: vscode.Uri, sourceText: string, treeMod
     let result;
     switch (treeMode) {
         case TreeMode.forEachChild:
-            result = treeConfigForEachChild(sourceFile, sourceFile, selections);
+            result = await treeConfigForEachChild(sourceFile, sourceFile, selections);
             break;
         case TreeMode.getChildren:
-            result = treeConfigGetChildren(sourceFile, sourceFile, selections);
+            result = await treeConfigGetChildren(sourceFile, sourceFile, selections);
             break;
     }
 
