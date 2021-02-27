@@ -5,7 +5,6 @@ interface ChartStructure {
     text: {
         name: string;
         title: string;
-        desc: string;
         'data-anchorLineCharacterJson': string;
         'data-activeLineCharacterJson': string;
     };
@@ -54,7 +53,6 @@ async function getChartStructure(sourceFile: SourceFile, node: Node, children: C
             // @ts-ignore
             name: ts.Debug.formatSyntaxKind(node.kind),
             title: `pos: ${node.pos}, end: ${node.end}`,
-            desc: sourceFile.text.substring(node.pos, node.end).substr(0, 50).replace(/\n/g, '\\n'),
             'data-anchorLineCharacterJson': JSON.stringify(anchorLineCharacter),
             'data-activeLineCharacterJson': JSON.stringify(activeLineCharacter),
 
@@ -76,12 +74,14 @@ async function treeConfigGetChildren(sourceFile: SourceFile, node: Node, selecti
 }
 
 async function treeConfigForEachChild(sourceFile: SourceFile, node: Node, selections: ReadonlyArray<vscode.Selection> | undefined): Promise<ChartStructure> {
-    let children: ChartStructure[] = [];
     const ts = await getTS();
-
-    ts.forEachChild(node, async childNode => {
-        children.push(await treeConfigForEachChild(sourceFile, childNode, selections));
+    
+    const promises: Promise<ChartStructure>[] = [];
+    ts.forEachChild(node, childNode => {
+        promises.push(treeConfigForEachChild(sourceFile, childNode, selections));
     });
+
+    const children = await Promise.all(promises);
 
     return await getChartStructure(sourceFile, node, children, selections);
 }
