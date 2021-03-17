@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as Mocha from 'mocha';
 import * as glob from 'glob';
 
+// TODO: Add tests. Classic...
 export function run(): Promise<void> {
 	// Create the mocha test
 	const mocha = new Mocha({

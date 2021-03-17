@@ -1,8 +1,9 @@
 {
-	"name": "sourcefilevisualizer",
-	"displayName": "sourcefilevisualizer",
-	"description": "",
+	"name": "typescript-source-file-visualizer",
+	"displayName": "TypeScript Source File Visualizer",
+	"description": "Visualizes a TypeScript source file in a graphical tree structure.",
 	"publisher": "armanio123",
+	"author": "Armando Aguirre <araguir@microsoft.com>",
 	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.53.0"
@@ -18,7 +19,7 @@
 		"commands": [
 			{
 				"command": "sourcefilevisualizer.visualizeTree",
-				"title": "Visualize AST"
+				"title": "Visualize Source File"
 			}
 		]
 	},
